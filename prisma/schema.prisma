@@ -1,0 +1,355 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  PROFESSIONAL
+  STARTER
+  VIEWER
+}
+
+enum CaseStatus {
+  NEW
+  ACTIVE
+  CONTACTED
+  VERIFIED
+  SIGNED
+  FILED
+  RECOVERED
+  CLOSED
+  EXPIRED
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CONVERTED
+  LOST
+}
+
+enum OutreachStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  RESPONDED
+}
+
+enum OutreachChannel {
+  SMS
+  EMAIL
+  VOICEMAIL
+  CALL
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  TRIALING
+}
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  emailVerified     DateTime?
+  name              String?
+  password          String?
+  role              UserRole  @default(VIEWER)
+  image             String?
+  phone             String?
+  company           String?
+  stripeCustomerId  String?   @unique
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  accounts     Account[]
+  sessions     Session[]
+  subscription Subscription?
+  savedCases   SavedCase[]
+  crmLeads     CrmLead[]
+  outreachLogs OutreachLog[]
+  activities   Activity[]
+  notes        Note[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  userId               String             @unique
+  stripeSubscriptionId String             @unique
+  stripePriceId        String
+  stripeCurrentPeriodEnd DateTime
+  status               SubscriptionStatus @default(TRIALING)
+  plan                 String
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SurplusCase {
+  id              String     @id @default(cuid())
+  ownerName       String
+  propertyAddress String
+  city            String
+  state           String
+  county          String
+  apn             String?
+  saleDate        DateTime
+  salePrice       Float
+  debtAmount      Float
+  surplusAmount   Float
+  courtCase       String?
+  claimDeadline   DateTime?
+  taxCommissionerUrl String?
+  status          CaseStatus @default(NEW)
+  score           Float      @default(0)
+  priority        String     @default("NORMAL")
+  isPublic        Boolean    @default(true)
+  sourceUrl       String?
+  notes           String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  ownerContacts   OwnerContact[]
+  propertyRecords PropertyRecord[]
+  claimForms      ClaimForm[]
+  savedBy         SavedCase[]
+  crmLeads        CrmLead[]
+  outreachLogs    OutreachLog[]
+  documents       Document[]
+
+  @@index([state, county])
+  @@index([ownerName])
+  @@index([surplusAmount])
+  @@index([saleDate])
+  @@index([status])
+  @@index([score])
+}
+
+model OwnerContact {
+  id               String   @id @default(cuid())
+  caseId           String
+  phone            String?
+  email            String?
+  knownAddress     String?
+  aliases          String[]
+  backgroundSource String?
+  confidence       Float    @default(0)
+  isVerified       Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  case SurplusCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+}
+
+model PropertyRecord {
+  id              String   @id @default(cuid())
+  caseId          String
+  warrantyDeedUrl String?
+  mortgageDeedUrl String?
+  lienRecords     String?
+  recordingDate   DateTime?
+  recorderOffice  String?
+  createdAt       DateTime @default(now())
+
+  case SurplusCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+}
+
+model ClaimForm {
+  id           String   @id @default(cuid())
+  caseId       String
+  formUrl      String?
+  county       String
+  state        String
+  instructions String?
+  deadline     DateTime?
+  createdAt    DateTime @default(now())
+
+  case SurplusCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  id        String   @id @default(cuid())
+  caseId    String
+  name      String
+  url       String
+  type      String
+  size      Int?
+  createdAt DateTime @default(now())
+
+  case SurplusCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+}
+
+model County {
+  id                 String   @id @default(cuid())
+  name               String
+  state              String
+  stateCode          String
+  taxCommissionerUrl String?
+  sheriffSaleUrl     String?
+  taxSaleUrl         String?
+  excessFundsUrl     String?
+  claimFormUrl       String?
+  phone              String?
+  address            String?
+  population         Int?
+  totalCases         Int      @default(0)
+  totalSurplus       Float    @default(0)
+  lastScraped        DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([name, stateCode])
+  @@index([stateCode])
+}
+
+model CrmLead {
+  id          String     @id @default(cuid())
+  userId      String
+  caseId      String?
+  firstName   String
+  lastName    String
+  email       String?
+  phone       String?
+  address     String?
+  status      LeadStatus @default(NEW)
+  score       Float      @default(0)
+  source      String?
+  tags        String[]
+  notes       String?
+  nextFollowUp DateTime?
+  assignedTo  String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  case         SurplusCase?  @relation(fields: [caseId], references: [id])
+  outreachLogs OutreachLog[]
+  activities   Activity[]
+  crmNotes     Note[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([caseId])
+}
+
+model OutreachLog {
+  id         String          @id @default(cuid())
+  userId     String
+  leadId     String?
+  caseId     String?
+  channel    OutreachChannel
+  status     OutreachStatus  @default(PENDING)
+  message    String
+  response   String?
+  scheduledAt DateTime?
+  sentAt     DateTime?
+  createdAt  DateTime        @default(now())
+
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lead CrmLead?     @relation(fields: [leadId], references: [id])
+  case SurplusCase? @relation(fields: [caseId], references: [id])
+}
+
+model Activity {
+  id          String   @id @default(cuid())
+  userId      String
+  leadId      String?
+  type        String
+  description String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lead CrmLead? @relation(fields: [leadId], references: [id])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  userId    String
+  leadId    String?
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lead CrmLead? @relation(fields: [leadId], references: [id])
+}
+
+model SavedCase {
+  id        String   @id @default(cuid())
+  userId    String
+  caseId    String
+  createdAt DateTime @default(now())
+
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  case SurplusCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, caseId])
+}
+
+model LeadMarketplaceItem {
+  id           String   @id @default(cuid())
+  caseId       String   @unique
+  price        Float
+  tier         String
+  isAvailable  Boolean  @default(true)
+  purchasedBy  String?
+  purchasedAt  DateTime?
+  createdAt    DateTime @default(now())
+}
+
+model RevenueEvent {
+  id          String   @id @default(cuid())
+  type        String
+  amount      Float
+  caseId      String?
+  userId      String?
+  description String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+}
