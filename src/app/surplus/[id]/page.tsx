@@ -184,7 +184,7 @@ export default async function SurplusCasePage({ params }: { params: { id: string
                           <div className="font-semibold text-gray-900">{primaryContact.phone}</div>
                         </div>
                         {primaryContact.isVerified && (
-                          <CheckCircle className="h-4 w-4 text-green-500 ml-auto" title="Verified" />
+                          <CheckCircle className="h-4 w-4 text-green-500 ml-auto" />
                         )}
                       </div>
                     )}
