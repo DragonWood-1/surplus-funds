@@ -13,11 +13,11 @@ export const metadata = {
 export default async function CountiesPage() {
   const counties = await prisma.county.findMany({ orderBy: [{ stateCode: 'asc' }, { name: 'asc' }] }).catch(() => [])
 
-  const byState = counties.reduce((acc: Record<string, typeof counties>, county) => {
+  const byState = counties.reduce((acc, county) => {
     if (!acc[county.stateCode]) acc[county.stateCode] = []
     acc[county.stateCode].push(county)
     return acc
-  }, {})
+  }, {} as Record<string, typeof counties>)
 
   const statesWithCounties = Object.keys(byState).sort()
 
