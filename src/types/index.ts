@@ -9,6 +9,7 @@ export type CrmLeadWithCase = CrmLead & {
 }
 
 export interface SearchParams {
+  [key: string]: string | undefined
   name?: string
   state?: string
   county?: string
